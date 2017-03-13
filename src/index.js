@@ -133,4 +133,30 @@ router.get('/betweenness/:graph', function (req, res) {
   res.json(data);
 })
 
+router.get('/eccentricity/:graph', function (req, res) {
+  const fromBk =  +req.queryParams.fromBk;
+  const toBk   =  +req.queryParams.toBk;
+
+  const subGraph = getSubGraph(fromBk, toBk);
+
+  const eccentricities = subGraph.graph._eccentricity();
+  subGraph.drop();
+
+  const data = Object
+    .keys(eccentricities)
+    .map((key) => {
+      const eccentricity = eccentricities[key];
+      const entity      = loadEntity(res, key);
+
+      return {
+        id:          key,
+        name:        entity.name,
+        eccentricity: eccentricity
+      }
+    })
+    .sort(sortBy('eccentricity'))
+
+  res.json(data);
+})
+
 module.context.use(router);
