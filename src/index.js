@@ -74,12 +74,35 @@ FOR i IN ${Interactions}
 }
 
 router.get('/radius/:graph', function (req, res) {
-  let graph = loadGraph(res, req.pathParams.graph);
+  const graph = loadGraph(res, req.pathParams.graph);
+  const fromBk =  +req.queryParams.fromBk;
+  const toBk   =  +req.queryParams.toBk;
 
-  res.json(graph._radius());
+  const subGraph = getSubGraph(fromBk, toBk);
+
+  const radius = subGraph.graph._radius();
+  subGraph.drop();
+
+  res.json({
+    radius: radius
+  });
 })
 .pathParam('graph', joi.string().required(), 'The name of the graph')
 .error('not found', 'Graph not found :(')
+
+router.get('/diameter/:graph', function (req, res) {
+  const fromBk =  +req.queryParams.fromBk;
+  const toBk   =  +req.queryParams.toBk;
+
+  const subGraph = getSubGraph(fromBk, toBk);
+
+  const diameter = subGraph.graph._diameter();
+  subGraph.drop();
+
+  res.json({
+    diameter: diameter
+  })
+})
 
 router.get('/closeness/:graph', function (req, res) {
   const fromBk =  +req.queryParams.fromBk;
@@ -157,6 +180,6 @@ router.get('/eccentricity/:graph', function (req, res) {
     .sort(sortBy('eccentricity'))
 
   res.json(data);
-})
+});
 
 module.context.use(router);
