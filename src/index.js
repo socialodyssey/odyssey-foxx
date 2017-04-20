@@ -45,7 +45,17 @@ function loadEntity(res, id) {
   return doc;
 }
 
-function getSubGraph(fromBk=1, toBk=24) {
+function parseBlacklist(str) {
+  let blacklist = str;
+
+  if(blacklist) {
+    blacklist = blacklist.split(',').map(x => 'Entities/' + x)
+  }
+
+  return blacklist;
+}
+
+function getSubGraph(fromBk=1, toBk=24, blacklist=[]) {
 
   const allEdges = db._query(
     aql`
@@ -60,9 +70,12 @@ FOR i IN ${Interactions}
   ]);
   
   allEdges
+    .filter((edge) => {
+      return !(blacklist.includes(edge._from) || blacklist.includes(edge._to));
+    })
     .forEach((edge) => {
       subGraph.tmpEdges.save(edge._from, edge._to, { book: edge.book })
-    })
+    });
 
   return {
     drop: () => {
@@ -74,27 +87,29 @@ FOR i IN ${Interactions}
 }
 
 router.get('/radius/:graph', function (req, res) {
-  const graph = loadGraph(res, req.pathParams.graph);
-  const fromBk =  +req.queryParams.fromBk;
-  const toBk   =  +req.queryParams.toBk;
-
-  const subGraph = getSubGraph(fromBk, toBk);
+  const graph     = loadGraph(res, req.pathParams.graph);
+  const fromBk    = +req.queryParams.fromBk;
+  const toBk      = +req.queryParams.toBk;
+  const blacklist = parseBlacklist(req.queryParams.blacklist);
+  
+  const subGraph  = getSubGraph(fromBk, toBk, blacklist);
 
   const radius = subGraph.graph._radius();
   subGraph.drop();
 
   res.json({
-    radius: radius
+    radius:    radius
   });
 })
 .pathParam('graph', joi.string().required(), 'The name of the graph')
 .error('not found', 'Graph not found :(')
 
 router.get('/diameter/:graph', function (req, res) {
-  const fromBk =  +req.queryParams.fromBk;
-  const toBk   =  +req.queryParams.toBk;
+  const fromBk    = +req.queryParams.fromBk;
+  const toBk      = +req.queryParams.toBk;
+  const blacklist = parseBlacklist(req.queryParams.blacklist);
 
-  const subGraph = getSubGraph(fromBk, toBk);
+  const subGraph = getSubGraph(fromBk, toBk, blacklist);
 
   const diameter = subGraph.graph._diameter();
   subGraph.drop();
@@ -105,10 +120,11 @@ router.get('/diameter/:graph', function (req, res) {
 })
 
 router.get('/closeness/:graph', function (req, res) {
-  const fromBk =  +req.queryParams.fromBk;
-  const toBk   =  +req.queryParams.toBk;
+  const fromBk    = +req.queryParams.fromBk;
+  const toBk      = +req.queryParams.toBk;
+  const blacklist = parseBlacklist(req.queryParams.blacklist);
 
-  const subGraph = getSubGraph(fromBk, toBk);
+  const subGraph = getSubGraph(fromBk, toBk, blacklist);
 
   const closenesses = subGraph.graph._closeness();
   subGraph.drop();
@@ -131,10 +147,11 @@ router.get('/closeness/:graph', function (req, res) {
 });
 
 router.get('/betweenness/:graph', function (req, res) {
-  const fromBk =  +req.queryParams.fromBk;
-  const toBk   =  +req.queryParams.toBk;
+  const fromBk    = +req.queryParams.fromBk;
+  const toBk      = +req.queryParams.toBk;
+  const blacklist = parseBlacklist(req.queryParams.blacklist);
 
-  const subGraph = getSubGraph(fromBk, toBk);
+  const subGraph = getSubGraph(fromBk, toBk, blacklist);
 
   const betweennesses = subGraph.graph._betweenness();
   subGraph.drop();
