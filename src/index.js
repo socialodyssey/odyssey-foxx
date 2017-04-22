@@ -211,10 +211,11 @@ router.get('/betweenness/:graph', function (req, res) {
     .keys(betweennesses)
     .map((key) => {
       const betweenness = betweennesses[key];
-      const entity      = loadEntity(res, key);
+      const entityId  = 'Entities/' + key.split('/')[1]
+      const entity      = loadEntity(res, entityId);
 
       return {
-        id:          key,
+        id:          entityId,
         name:        entity.name,
         betweenness: betweenness
       }
@@ -242,10 +243,11 @@ router.get('/eccentricity/:graph', function (req, res) {
     .keys(eccentricities)
     .map((key) => {
       const eccentricity = eccentricities[key];
-      const entity      = loadEntity(res, key);
+      const entityId  = 'Entities/' + key.split('/')[1]
+      const entity      = loadEntity(res, entityId);
 
       return {
-        id:          key,
+        id:          entityId,
         name:        entity.name,
         eccentricity: eccentricity
       }
