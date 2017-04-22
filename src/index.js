@@ -55,7 +55,9 @@ function parseBlacklist(str) {
   return blacklist;
 }
 
-function getSubGraph(fromBk=1, toBk=24, blacklist=[]) {
+function getSubGraph(fromBk=1, toBk=24, opts={}) {
+  const blacklist  = opts.blacklist  || [];
+  const entityType = opts.entityType || 'all'; 
 
   const allEdges = db._query(
     aql`
@@ -64,23 +66,55 @@ FOR i IN ${Interactions}
     RETURN i
 `
   )._documents;
-  
-  const subGraph = graphs._create('tmpGraph', [
-    graphs._relation('tmpEdges', 'Entities', 'Entities')
-  ]);
-  
-  allEdges
-    .filter((edge) => {
-      return !(blacklist.includes(edge._from) || blacklist.includes(edge._to));
+
+  const allEntities = db._query(
+    aql`
+FOR e IN ${Entities}
+    RETURN e
+`
+  )._documents;
+  const subCollection = db._create('tmpCollection');
+
+  allEntities
+    .filter((entity) => {
+      if(entityType === 'mortal' && entity.type.lastIndexOf('PER') === -1) {
+        return false;
+      }
+
+      if(entityType === 'god' && entity.type.lastIndexOf('GOD') === -1) {
+        return false;
+      }
+
+      if(blacklist.length > 0 && blacklist.includes(entity._id)) {
+        return false;
+      }
+
+      return true;
     })
+    .forEach((entity) => {
+      const entityClone = Object.assign({}, entity);
+      entityClone._id = 'tmpCollection/' + entityClone._id.split('/')[1];
+      delete entityClone._rev;
+
+      subCollection.save(entityClone);
+    })
+
+  const subGraph = graphs._create('tmpGraph', [
+    graphs._relation('tmpEdges', 'tmpCollection', 'tmpCollection')
+  ]);
+
+  allEdges
     .forEach((edge) => {
-      subGraph.tmpEdges.save(edge._from, edge._to, { book: edge.book })
+      const fromm = 'tmpCollection/' + edge._from.split('/')[1]
+      const to    = 'tmpCollection/' + edge._to.split('/')[1]
+      subGraph.tmpEdges.save(fromm, to, { book: edge.book })
     });
 
   return {
     drop: () => {
       graphs._drop('tmpGraph');
       db._drop('tmpEdges');
+      subCollection.drop();
     },
     graph: subGraph
   }
@@ -91,25 +125,33 @@ router.get('/radius/:graph', function (req, res) {
   const fromBk    = +req.queryParams.fromBk;
   const toBk      = +req.queryParams.toBk;
   const blacklist = parseBlacklist(req.queryParams.blacklist);
-  
-  const subGraph  = getSubGraph(fromBk, toBk, blacklist);
+  const entityType = req.queryParams.entityType || 'all';
+
+  const subGraph  = getSubGraph(fromBk, toBk, {
+    blacklist:  blacklist,
+    entityType: entityType
+  });
 
   const radius = subGraph.graph._radius();
   subGraph.drop();
 
   res.json({
-    radius:    radius
+    radius: radius
   });
 })
 .pathParam('graph', joi.string().required(), 'The name of the graph')
 .error('not found', 'Graph not found :(')
 
 router.get('/diameter/:graph', function (req, res) {
-  const fromBk    = +req.queryParams.fromBk;
-  const toBk      = +req.queryParams.toBk;
-  const blacklist = parseBlacklist(req.queryParams.blacklist);
+  const fromBk     = +req.queryParams.fromBk;
+  const toBk       = +req.queryParams.toBk;
+  const blacklist  = parseBlacklist(req.queryParams.blacklist);
+  const entityType = req.queryParams.entityType || 'all';
 
-  const subGraph = getSubGraph(fromBk, toBk, blacklist);
+  const subGraph = getSubGraph(fromBk, toBk, {
+    blacklist:  blacklist,
+    entityType: entityType
+  });
 
   const diameter = subGraph.graph._diameter();
   subGraph.drop();
@@ -123,8 +165,12 @@ router.get('/closeness/:graph', function (req, res) {
   const fromBk    = +req.queryParams.fromBk;
   const toBk      = +req.queryParams.toBk;
   const blacklist = parseBlacklist(req.queryParams.blacklist);
+  const entityType = req.queryParams.entityType || 'all';
 
-  const subGraph = getSubGraph(fromBk, toBk, blacklist);
+  const subGraph = getSubGraph(fromBk, toBk, {
+    blacklist:  blacklist,
+    entityType: entityType
+  });
 
   const closenesses = subGraph.graph._closeness();
   subGraph.drop();
@@ -133,10 +179,11 @@ router.get('/closeness/:graph', function (req, res) {
     .keys(closenesses)
     .map((key) => {
       const closeness = closenesses[key];
-      const entity    = loadEntity(res, key);
+      const entityId  = 'Entities/' + key.split('/')[1]
+      const entity    = loadEntity(res, entityId);
 
       return {
-        id:        key,
+        id:        entityId,
         name:      entity.name,
         closeness: closeness
       }
@@ -150,8 +197,12 @@ router.get('/betweenness/:graph', function (req, res) {
   const fromBk    = +req.queryParams.fromBk;
   const toBk      = +req.queryParams.toBk;
   const blacklist = parseBlacklist(req.queryParams.blacklist);
+  const entityType = req.queryParams.entityType || 'all';
 
-  const subGraph = getSubGraph(fromBk, toBk, blacklist);
+  const subGraph = getSubGraph(fromBk, toBk, {
+    blacklist:  blacklist,
+    entityType: entityType
+  });
 
   const betweennesses = subGraph.graph._betweenness();
   subGraph.drop();
@@ -176,8 +227,13 @@ router.get('/betweenness/:graph', function (req, res) {
 router.get('/eccentricity/:graph', function (req, res) {
   const fromBk =  +req.queryParams.fromBk;
   const toBk   =  +req.queryParams.toBk;
+  const blacklist = parseBlacklist(req.queryParams.blacklist);
+  const entityType = req.queryParams.entityType || 'all';
 
-  const subGraph = getSubGraph(fromBk, toBk);
+  const subGraph = getSubGraph(fromBk, toBk, {
+    blacklist:  blacklist,
+    entityType: entityType
+  });
 
   const eccentricities = subGraph.graph._eccentricity();
   subGraph.drop();
