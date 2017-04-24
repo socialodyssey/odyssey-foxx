@@ -292,7 +292,7 @@ FOR i IN ${Interactions}
     .keys(entityMap)
     .map((entityId) => {
       const speechTotal = entityMap[entityId]
-        .reduce((a, b) => a + (b.speech.to_line - b.speech.from_line), 0);
+        .reduce((a, b) => a + (b.speech.to_line - b.speech.from_line) + 1, 0);
 
         return {
           id:     entityId,
