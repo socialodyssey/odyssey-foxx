@@ -257,4 +257,52 @@ router.get('/eccentricity/:graph', function (req, res) {
   res.json(data);
 });
 
+// XXX
+router.get('/characterspeech', function (req, res) {
+  const fromBk =  +req.queryParams.fromBk || 1;
+  const toBk   =  +req.queryParams.toBk   || 12;
+
+  const interactions = db._query(
+    aql`
+FOR i IN ${Interactions}
+    FILTER i.book >= ${fromBk} AND i.book <= ${toBk}
+    FILTER i.type == 'INR.VERBAL-NEAR' OR i.type == 'INR.VERBAL-FAR'
+    FOR e IN ${Entities}
+        FILTER e._id == i._from
+        RETURN {
+            id:     e._id,
+            name:   e.name,
+            speech: i.selection
+        }
+`
+  )._documents;
+
+  const entityMap = {};
+
+  interactions
+    .forEach((interaction) => {
+      if(!entityMap[interaction.id]) {
+        entityMap[interaction.id] = []
+      }
+
+      entityMap[interaction.id].push(interaction);
+    })
+
+  const data = Object
+    .keys(entityMap)
+    .map((entityId) => {
+      const speechTotal = entityMap[entityId]
+        .reduce((a, b) => a + (b.speech.to_line - b.speech.from_line), 0);
+
+        return {
+          id:     entityId,
+          name:   entityMap[entityId][0].name,
+          speech: speechTotal
+        }
+    })
+    .sort((a, b) => b.speech - a.speech)
+
+  res.json(data)
+})
+
 module.context.use(router);
